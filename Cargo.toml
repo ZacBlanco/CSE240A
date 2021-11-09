@@ -1,0 +1,11 @@
+[package]
+name = "cse240a"
+version = "0.0.0"
+authors = ["zac blanco <zblanco@ucsd.edu>", "Eric Mugnier <emugnier@ucsd.edu>"]
+edition = "2018"
+
+[dependencies]
+structopt = "0.3"
+
+[dev-dependencies]
+rand = "0.7.3"
