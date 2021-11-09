@@ -16,20 +16,6 @@ pub trait Predictor {
     fn train_predictor(&self, pc: u32, outcome: BranchResult);
 }
 
-pub struct GSharePredictor {
-    hist_bits: u32,
-}
-
-impl Predictor for GSharePredictor {
-    fn make_prediction(&self, pc: u32) -> BranchResult {
-        todo!()
-    }
-
-    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
-        todo!()
-    }
-}
-
 pub struct StaticPredictor;
 
 impl Predictor for StaticPredictor {
@@ -42,19 +28,79 @@ impl Predictor for StaticPredictor {
     }
 }
 
+pub struct GSharePredictor {
+    hist_bits: u32,
+}
+
+impl GSharePredictor {
+    pub fn new(hist_bits: u32) -> GSharePredictor {
+        GSharePredictor { hist_bits }
+    }
+}
+
+impl Predictor for GSharePredictor {
+    fn make_prediction(&self, pc: u32) -> BranchResult {
+        todo!()
+    }
+
+    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
+        todo!()
+    }
+}
+
+pub struct TournamentPredictor {
+    ghist_bits: u32,
+    lhist_bits: u32,
+    pc_index: u32,
+}
+
+impl TournamentPredictor {
+    pub fn new(ghist_bits: u32, lhist_bits: u32, pc_index: u32) -> TournamentPredictor {
+        TournamentPredictor {
+            ghist_bits,
+            lhist_bits,
+            pc_index,
+        }
+    }
+}
+
+impl Predictor for TournamentPredictor {
+    fn make_prediction(&self, pc: u32) -> BranchResult {
+        todo!()
+    }
+
+    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
+        todo!()
+    }
+}
+
+pub struct CustomPredictor;
+
+impl CustomPredictor {
+    pub fn new() -> CustomPredictor {
+        CustomPredictor {}
+    }
+}
+
+impl Predictor for CustomPredictor {
+    fn make_prediction(&self, pc: u32) -> BranchResult {
+        todo!()
+    }
+
+    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
+        todo!()
+    }
+}
 
 #[cfg(test)]
 mod test {
-    use crate::{BranchResult, predictor::Predictor};
+    use crate::{predictor::Predictor, BranchResult};
 
     use super::StaticPredictor;
 
-
-  #[test]
-  fn test_static() {
-    let predictor = StaticPredictor{};
-    assert_eq!(BranchResult::Taken, predictor.make_prediction(0));
-  }
-
-
+    #[test]
+    fn test_static() {
+        let predictor = StaticPredictor {};
+        assert_eq!(BranchResult::Taken, predictor.make_prediction(0));
+    }
 }

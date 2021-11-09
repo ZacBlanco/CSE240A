@@ -1,6 +1,11 @@
 use std::str::FromStr;
 
 use structopt::StructOpt;
+
+use crate::predictor::CustomPredictor;
+use crate::predictor::GSharePredictor;
+use crate::predictor::StaticPredictor;
+use crate::predictor::TournamentPredictor;
 mod predictor;
 
 #[derive(PartialEq, Debug)]
@@ -69,20 +74,23 @@ struct Opt {
 
 fn main() -> Result<(), std::io::Error> {
     let args = Opt::from_args();
-    let predictor: Box<dyn predictor::Predictor> = Box::new(match args.predictor {
-        Predictors::STATIC => predictor::StaticPredictor {},
-        Predictors::GSHARE(hist_bits) => todo!(),
-        Predictors::TOURNAMENT(ghist, lhist, pc_index) => unimplemented!(),
-        Predictors::CUSTOM => unimplemented!(),
-        _ => panic!("invalid predictor????"),
-    });
+    let predictor: Box<dyn predictor::Predictor> = match args.predictor {
+        Predictors::STATIC => Box::new(StaticPredictor {}),
+        Predictors::GSHARE(hist_bits) => Box::new(GSharePredictor::new(hist_bits)),
+        Predictors::TOURNAMENT(ghist, lhist, pc_index) => {
+            Box::new(TournamentPredictor::new(ghist, lhist, pc_index))
+        }
+        Predictors::CUSTOM => Box::new(CustomPredictor::new()),
+    };
 
     let mut num_branches: u32 = 0;
     let mut mispredictions: u32 = 0;
 
     let mut buf = String::new();
     let stdin = std::io::stdin();
-    while let bytes_read = stdin.read_line(&mut buf) {
+    loop {
+        buf.clear()
+        let bytes_read = stdin.read_line(&mut buf);
         match bytes_read {
             Ok(0) => break,
             Ok(_) => {
@@ -108,7 +116,6 @@ fn main() -> Result<(), std::io::Error> {
             }
             Err(e) => panic!("Failed to read stdin: {:?}", e),
         }
-        buf.clear();
     }
 
     println!("branches:\t\t{}", num_branches);
