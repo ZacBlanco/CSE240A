@@ -74,7 +74,7 @@ struct Opt {
 
 fn main() -> Result<(), std::io::Error> {
     let args = Opt::from_args();
-    let predictor: Box<dyn predictor::Predictor> = match args.predictor {
+    let mut predictor: Box<dyn predictor::Predictor> = match args.predictor {
         Predictors::STATIC => Box::new(StaticPredictor {}),
         Predictors::GSHARE(hist_bits) => Box::new(GSharePredictor::new(hist_bits)),
         Predictors::TOURNAMENT(ghist, lhist, pc_index) => {
@@ -88,18 +88,25 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut buf = String::new();
     let stdin = std::io::stdin();
+    let mut stdin = stdin.lock();
     loop {
-        buf.clear()
+        buf.clear();
         let bytes_read = stdin.read_line(&mut buf);
         match bytes_read {
             Ok(0) => break,
             Ok(_) => {
-                let parts = buf.split(" ").collect::<Vec<&str>>();
-                if parts.len() != 2 {
-                    panic!("invalid branch format: \"{}\"", buf);
-                }
-                let pc = u32::from_str_radix(&parts[0][2..], 16).unwrap();
-                let outcome = match parts[1].trim().parse::<u8>().unwrap() {
+                let mut parts = buf.split(" ");
+                let raw_pc = parts.next().unwrap();
+                let pc = u32::from_str_radix(&raw_pc[2..], 16).unwrap();
+                let raw_outcome = parts.next().unwrap();
+                let outcome = match &raw_outcome
+                    .chars()
+                    .nth(0)
+                    .unwrap()
+                    .to_string()
+                    .parse::<u8>()
+                    .unwrap()
+                {
                     0 => BranchResult::NotTaken,
                     1 => BranchResult::Taken,
                     _ => panic!("invalid branch outcome"),
