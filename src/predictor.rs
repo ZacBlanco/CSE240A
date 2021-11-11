@@ -7,36 +7,36 @@ use crate::BranchResult;
 
 #[derive(Clone, Copy, Debug)]
 enum TwoBitCounterState {
-    StrongNotTaken,
-    StrongTaken,
-    WeakNotTaken,
-    WeakTaken,
+    StrongNot,
+    Strong,
+    WeakNot,
+    Weak,
 }
 
 impl TwoBitCounterState {
     fn shift_result(&self, branch: BranchResult) -> TwoBitCounterState {
         match branch {
             BranchResult::Taken => match &self {
-                Self::StrongNotTaken => Self::WeakNotTaken,
-                Self::WeakNotTaken => Self::WeakTaken,
-                Self::WeakTaken => Self::StrongTaken,
-                Self::StrongTaken => Self::StrongTaken,
+                Self::StrongNot => Self::WeakNot,
+                Self::WeakNot => Self::Weak,
+                Self::Weak => Self::Strong,
+                Self::Strong => Self::Strong,
             },
             BranchResult::NotTaken => match &self {
-                Self::StrongNotTaken => Self::StrongNotTaken,
-                Self::WeakNotTaken => Self::StrongNotTaken,
-                Self::WeakTaken => Self::WeakNotTaken,
-                Self::StrongTaken => Self::WeakTaken,
+                Self::StrongNot => Self::StrongNot,
+                Self::WeakNot => Self::StrongNot,
+                Self::Weak => Self::WeakNot,
+                Self::Strong => Self::Weak,
             },
         }
     }
 
-    fn to_branch_result(&self) -> BranchResult {
-        match &self {
-            Self::WeakTaken => BranchResult::Taken,
-            Self::StrongTaken => BranchResult::Taken,
-            Self::WeakNotTaken => BranchResult::NotTaken,
-            Self::StrongNotTaken => BranchResult::NotTaken,
+    fn to_branch_result(self) -> BranchResult {
+        match self {
+            Self::Weak => BranchResult::Taken,
+            Self::Strong => BranchResult::Taken,
+            Self::WeakNot => BranchResult::NotTaken,
+            Self::StrongNot => BranchResult::NotTaken,
         }
     }
 }
@@ -57,7 +57,7 @@ pub struct StaticPredictor;
 
 impl Predictor for StaticPredictor {
     fn make_prediction(&self, _pc: u32) -> BranchResult {
-        return BranchResult::Taken;
+        BranchResult::Taken
     }
 
     fn train_predictor(&mut self, _pc: u32, _outcome: BranchResult) {
@@ -115,7 +115,7 @@ impl Predictor for GSharePredictor {
         let state = self
             .state_table
             .entry(index)
-            .or_insert(TwoBitCounterState::StrongNotTaken);
+            .or_insert(TwoBitCounterState::StrongNot);
         *state = state.shift_result(outcome);
     }
 }

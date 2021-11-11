@@ -17,34 +17,34 @@ pub enum BranchResult {
 
 #[derive(Debug)]
 enum Predictors {
-    STATIC,
-    GSHARE(u32),
-    TOURNAMENT(u32, u32, u32),
-    CUSTOM,
+    Static,
+    Gshare(u32),
+    Tournament(u32, u32, u32),
+    Custom,
 }
 
 impl FromStr for Predictors {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.starts_with("static") {
-            return Ok(Predictors::STATIC);
+            Ok(Predictors::Static)
         } else if s.starts_with("gshare") {
             let s = s.to_string();
-            let nums = s.trim_start_matches("gshare").split(":");
+            let nums = s.trim_start_matches("gshare").split(':');
             let nums = nums
-                .filter(|s| *s != "")
+                .filter(|s| !s.is_empty())
                 .map(|v| v.parse::<u32>().unwrap())
                 .collect::<Vec<u32>>();
-            if nums.len() < 1 {
+            if nums.is_empty() {
                 return Err(String::from(
                     "gshare:<history bits> argument required for gshare",
                 ));
             }
-            return Ok(Predictors::GSHARE(nums[0]));
+            Ok(Predictors::Gshare(nums[0]))
         } else if s.starts_with("tournament") {
             let s = s.to_string();
-            let nums = s.trim_start_matches("tournament").split(":");
+            let nums = s.trim_start_matches("tournament").split(':');
             let nums = nums
-                .filter(|s| *s != "")
+                .filter(|s| !s.is_empty())
                 .map(|v| v.parse::<u32>().unwrap())
                 .collect::<Vec<u32>>();
             if nums.len() < 3 {
@@ -52,11 +52,11 @@ impl FromStr for Predictors {
                     "tournament:<ghistory>:<lhistory>:<index> bits required for tournament",
                 ));
             }
-            return Ok(Predictors::TOURNAMENT(nums[0], nums[1], nums[2]));
+            Ok(Predictors::Tournament(nums[0], nums[1], nums[2]))
         } else if s.starts_with("custom") {
-            return Ok(Predictors::CUSTOM);
+            Ok(Predictors::Custom)
         } else {
-            return Err(String::from("invalid predictor type"));
+            Err(String::from("invalid predictor type"))
         }
     }
 
@@ -76,12 +76,12 @@ struct Opt {
 fn main() -> Result<(), std::io::Error> {
     let args = Opt::from_args();
     let mut predictor: Box<dyn predictor::Predictor> = match args.predictor {
-        Predictors::STATIC => Box::new(StaticPredictor {}),
-        Predictors::GSHARE(hist_bits) => Box::new(GSharePredictor::new(hist_bits)),
-        Predictors::TOURNAMENT(ghist, lhist, pc_index) => {
+        Predictors::Static => Box::new(StaticPredictor {}),
+        Predictors::Gshare(hist_bits) => Box::new(GSharePredictor::new(hist_bits)),
+        Predictors::Tournament(ghist, lhist, pc_index) => {
             Box::new(TournamentPredictor::new(ghist, lhist, pc_index))
         }
-        Predictors::CUSTOM => Box::new(CustomPredictor::new()),
+        Predictors::Custom => Box::new(CustomPredictor::new()),
     };
 
     let mut num_branches: u32 = 0;
@@ -96,13 +96,13 @@ fn main() -> Result<(), std::io::Error> {
         match bytes_read {
             Ok(0) => break,
             Ok(_) => {
-                let mut parts = buf.split(" ");
+                let mut parts = buf.split(' ');
                 let raw_pc = parts.next().unwrap();
                 let pc = u32::from_str_radix(&raw_pc[2..], 16).unwrap();
                 let raw_outcome = parts.next().unwrap();
                 let outcome = match &raw_outcome
                     .chars()
-                    .nth(0)
+                    .next()
                     .unwrap()
                     .to_string()
                     .parse::<u8>()
