@@ -1,3 +1,4 @@
+use std::io::BufRead;
 use std::str::FromStr;
 
 use structopt::StructOpt;
@@ -8,7 +9,7 @@ use crate::predictor::StaticPredictor;
 use crate::predictor::TournamentPredictor;
 mod predictor;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum BranchResult {
     Taken,
     NotTaken,

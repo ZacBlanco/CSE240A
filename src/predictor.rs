@@ -1,8 +1,45 @@
 //! This file contains the trait defining the branch predictor.
 //!
 
+use std::{cmp::min, collections::HashMap};
+
 use crate::BranchResult;
 
+#[derive(Clone, Copy, Debug)]
+enum TwoBitCounterState {
+    StrongNotTaken,
+    StrongTaken,
+    WeakNotTaken,
+    WeakTaken,
+}
+
+impl TwoBitCounterState {
+    fn shift_result(&self, branch: BranchResult) -> TwoBitCounterState {
+        match branch {
+            BranchResult::Taken => match &self {
+                Self::StrongNotTaken => Self::WeakNotTaken,
+                Self::WeakNotTaken => Self::WeakTaken,
+                Self::WeakTaken => Self::StrongTaken,
+                Self::StrongTaken => Self::StrongTaken,
+            },
+            BranchResult::NotTaken => match &self {
+                Self::StrongNotTaken => Self::StrongNotTaken,
+                Self::WeakNotTaken => Self::StrongNotTaken,
+                Self::WeakTaken => Self::WeakNotTaken,
+                Self::StrongTaken => Self::WeakTaken,
+            },
+        }
+    }
+
+    fn to_branch_result(&self) -> BranchResult {
+        match &self {
+            Self::WeakTaken => BranchResult::Taken,
+            Self::StrongTaken => BranchResult::Taken,
+            Self::WeakNotTaken => BranchResult::NotTaken,
+            Self::StrongNotTaken => BranchResult::NotTaken,
+        }
+    }
+}
 /// A branch predictor
 pub trait Predictor {
     /// Make a prediction for conditional branch instruction at PC 'pc'
@@ -13,7 +50,7 @@ pub trait Predictor {
     /// Train the predictor the last executed branch at PC 'pc' and with
     /// outcome 'outcome' (true indicates that the branch was taken, false
     /// indicates that the branch was not taken)
-    fn train_predictor(&self, pc: u32, outcome: BranchResult);
+    fn train_predictor(&mut self, pc: u32, outcome: BranchResult);
 }
 
 pub struct StaticPredictor;
@@ -23,53 +60,90 @@ impl Predictor for StaticPredictor {
         return BranchResult::Taken;
     }
 
-    fn train_predictor(&self, _pc: u32, _outcome: BranchResult) {
+    fn train_predictor(&mut self, _pc: u32, _outcome: BranchResult) {
         // intentionally empty
     }
 }
 
 pub struct GSharePredictor {
     hist_bits: u32,
+    history_register: Vec<BranchResult>,
+    state_table: HashMap<u32, TwoBitCounterState>,
 }
 
 impl GSharePredictor {
     pub fn new(hist_bits: u32) -> GSharePredictor {
-        GSharePredictor { hist_bits }
+        GSharePredictor {
+            hist_bits,
+            history_register: vec![BranchResult::NotTaken; hist_bits as usize],
+            state_table: HashMap::new(),
+        }
+    }
+
+    fn hist_to_u32(&self) -> u32 {
+        let mut x: u32 = 0;
+        for i in 0..(min(self.hist_bits, 32)) {
+            x <<= 1;
+            // println!("0b{:032b}", x);
+            // set the bit
+            x |= match self.history_register[i as usize] {
+                BranchResult::Taken => 0,
+                BranchResult::NotTaken => 1,
+            };
+        }
+        x
+    }
+
+    fn xor_pc_history(&self, pc: u32) -> u32 {
+        pc ^ self.hist_to_u32()
     }
 }
 
 impl Predictor for GSharePredictor {
     fn make_prediction(&self, pc: u32) -> BranchResult {
-        todo!()
+        let table_index = self.xor_pc_history(pc);
+        match self.state_table.get(&table_index) {
+            Some(state) => state.to_branch_result(),
+            None => BranchResult::NotTaken,
+        }
     }
 
-    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
-        todo!()
+    fn train_predictor(&mut self, pc: u32, outcome: BranchResult) {
+        let index = self.xor_pc_history(pc);
+        self.history_register.rotate_right(1);
+        self.history_register[0] = outcome.clone();
+        let state = self
+            .state_table
+            .entry(index)
+            .or_insert(TwoBitCounterState::StrongNotTaken);
+        *state = state.shift_result(outcome);
     }
 }
 
 pub struct TournamentPredictor {
-    ghist_bits: u32,
-    lhist_bits: u32,
-    pc_index: u32,
+    // ghist_bits: u32,
+    // lhist_bits: u32,
+    // pc_index: u32,
 }
 
+#[allow(unused_variables)]
 impl TournamentPredictor {
     pub fn new(ghist_bits: u32, lhist_bits: u32, pc_index: u32) -> TournamentPredictor {
         TournamentPredictor {
-            ghist_bits,
-            lhist_bits,
-            pc_index,
+            // ghist_bits,
+            // lhist_bits,
+            // pc_index,
         }
     }
 }
 
+#[allow(unused_variables)]
 impl Predictor for TournamentPredictor {
     fn make_prediction(&self, pc: u32) -> BranchResult {
         todo!()
     }
 
-    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
+    fn train_predictor(&mut self, pc: u32, outcome: BranchResult) {
         todo!()
     }
 }
@@ -82,12 +156,13 @@ impl CustomPredictor {
     }
 }
 
+#[allow(unused_variables)]
 impl Predictor for CustomPredictor {
     fn make_prediction(&self, pc: u32) -> BranchResult {
         todo!()
     }
 
-    fn train_predictor(&self, pc: u32, outcome: BranchResult) {
+    fn train_predictor(&mut self, pc: u32, outcome: BranchResult) {
         todo!()
     }
 }
