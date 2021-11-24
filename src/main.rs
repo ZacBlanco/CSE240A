@@ -14,7 +14,7 @@ pub enum BranchResult {
     Taken,
     NotTaken,
 }
-
+// ask for the order or the thing above
 #[derive(Debug)]
 enum Predictors {
     STATIC,
