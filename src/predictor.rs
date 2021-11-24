@@ -126,6 +126,7 @@ pub struct TournamentPredictor {
     pc_index: u32,
     g_state: Vec<TwoBitCounterState>,
     l_state: Vec<TwoBitCounterState>, 
+    l_pattern: Vec<u32>,
     m_state: TwoBitCounterState, 
     ghist: usize,
 }
@@ -139,6 +140,7 @@ impl TournamentPredictor {
             pc_index,
             g_state: vec![TwoBitCounterState::WeakNotTaken; usize::pow(2,ghist_bits) as usize],
             l_state: vec![TwoBitCounterState::WeakNotTaken; u32::pow(2,lhist_bits) as usize],
+            l_pattern: vec![0; u32::pow(2,pc_index) as usize],
             m_state: TwoBitCounterState::WeakNotTaken,
             ghist: 0,
         }
@@ -147,24 +149,32 @@ impl TournamentPredictor {
     fn make_local_prediction(&self, pc: u32) -> BranchResult {
 
         // println!("local");
-        let l_index = (pc & ((1 << self.lhist_bits) -1))as usize;
+        let l_pattern_index = (pc & ((1 << self.pc_index) -1))as usize;
+        let l_index = self.l_pattern[l_pattern_index];
         // println!("pc: {:#?}", pc);
         // println!("l_state: {:#?}", self.l_state);
         
-        // println!("pred: {:#?}", self.l_state[l_index].to_branch_result());
-        self.l_state[l_index].to_branch_result()
+        // println!("pred: {:#?}", self.l_state[l_index as usize].to_branch_result());
+        self.l_state[l_index as usize].to_branch_result()
     }
 
     fn train_local_predictor(&mut self, pc: u32, outcome: BranchResult) {
         // println!("outcome: {:#?}", outcome);
         // println!("outcome: {:#?}", outcome.clone() as usize);
         // println!("pc: 0b{:032b}", pc);
-        // println!("pc: {}", (pc & ((1 << self.lhist_bits) -1)));
+        // println!("pc: {}", (pc & ((1 << self.pc_index) -1)));
+        // println!("l_pattern: {:#?}", self.l_pattern);
+        let l_pattern_index = (pc & ((1 << self.pc_index) -1))as usize;
+        let l_index = self.l_pattern[l_pattern_index];
         
-        let l_index = (pc & ((1 << self.lhist_bits) -1)) as usize;
-        // println!("pc: {:#?}", l_index);
-        self.l_state[l_index] = self.l_state[l_index].shift_result(outcome.clone());
+
+        // println!("l_index: {:#?}", l_index);
         // println!("l_state: {:#?}", self.l_state);
+        self.l_state[l_index as usize] = self.l_state[l_index as usize].shift_result(outcome.clone());
+        self.l_pattern[l_pattern_index] = ((self.l_pattern[l_pattern_index] << 1)  & ((1 << self.pc_index) -1)) | outcome as u32 ;
+
+        // println!("l_state: {:#?}", self.l_state);
+        use::std::thread::sleep_ms;
     }
 
     fn make_global_prediction(&self, pc: u32) -> BranchResult {
@@ -197,6 +207,7 @@ impl Predictor for TournamentPredictor {
                 TwoBitCounterState::StrongNotTaken => self.make_global_prediction(pc),
                 TwoBitCounterState::WeakNotTaken => self.make_global_prediction(pc),
             }
+        // self.make_local_prediction(pc)
     }
 
 
