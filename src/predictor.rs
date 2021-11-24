@@ -121,30 +121,101 @@ impl Predictor for GSharePredictor {
 }
 
 pub struct TournamentPredictor {
-    // ghist_bits: u32,
-    // lhist_bits: u32,
-    // pc_index: u32,
+    ghist_bits: u32,
+    lhist_bits: u32,
+    pc_index: u32,
+    g_state: Vec<TwoBitCounterState>,
+    l_state: Vec<TwoBitCounterState>, 
+    m_state: TwoBitCounterState, 
+    ghist: usize,
 }
 
 #[allow(unused_variables)]
 impl TournamentPredictor {
     pub fn new(ghist_bits: u32, lhist_bits: u32, pc_index: u32) -> TournamentPredictor {
         TournamentPredictor {
-            // ghist_bits,
-            // lhist_bits,
-            // pc_index,
+            ghist_bits,
+            lhist_bits,
+            pc_index,
+            g_state: vec![TwoBitCounterState::WeakNotTaken; usize::pow(2,ghist_bits) as usize],
+            l_state: vec![TwoBitCounterState::WeakNotTaken; u32::pow(2,lhist_bits) as usize],
+            m_state: TwoBitCounterState::WeakNotTaken,
+            ghist: 0,
         }
+    }
+
+    fn make_local_prediction(&self, pc: u32) -> BranchResult {
+
+        // println!("local");
+        let l_index = (pc & ((1 << self.lhist_bits) -1))as usize;
+        // println!("pc: {:#?}", pc);
+        // println!("l_state: {:#?}", self.l_state);
+        
+        // println!("pred: {:#?}", self.l_state[l_index].to_branch_result());
+        self.l_state[l_index].to_branch_result()
+    }
+
+    fn train_local_predictor(&mut self, pc: u32, outcome: BranchResult) {
+        // println!("outcome: {:#?}", outcome);
+        // println!("outcome: {:#?}", outcome.clone() as usize);
+        // println!("pc: 0b{:032b}", pc);
+        // println!("pc: {}", (pc & ((1 << self.lhist_bits) -1)));
+        
+        let l_index = (pc & ((1 << self.lhist_bits) -1)) as usize;
+        // println!("pc: {:#?}", l_index);
+        self.l_state[l_index] = self.l_state[l_index].shift_result(outcome.clone());
+        // println!("l_state: {:#?}", self.l_state);
+    }
+
+    fn make_global_prediction(&self, pc: u32) -> BranchResult {
+        // println!("global");
+        let g_index = self.ghist & ((1 << self.ghist_bits) -1);
+        // println!("g_hist: {:#?}", self.ghist);
+        // println!("g_state: {:#?}", self.g_state);
+        // println!("pred: {:#?}", self.g_state[g_index].to_branch_result());
+        self.g_state[g_index].to_branch_result()
+    }
+
+    fn train_global_predictor(&mut self, pc: u32, outcome: BranchResult) {
+        // println!("outcome: {:#?}", outcome);
+        // println!("outcome: {:#?}", outcome.clone() as usize);
+        // println!("g_hist: {:#?}", self.ghist);
+        self.g_state[self.ghist] = self.g_state[self.ghist].shift_result(outcome.clone());
+        // println!("g_state: {:#?}", self.g_state);
+        self.ghist = ((self.ghist << 1)  & ((1 << self.ghist_bits) -1)) | outcome as usize ;
     }
 }
 
 #[allow(unused_variables)]
 impl Predictor for TournamentPredictor {
+
+
     fn make_prediction(&self, pc: u32) -> BranchResult {
-        todo!()
+        match self.m_state {
+                TwoBitCounterState::WeakTaken => self.make_local_prediction(pc),
+                TwoBitCounterState::StrongTaken => self.make_local_prediction(pc),
+                TwoBitCounterState::StrongNotTaken => self.make_global_prediction(pc),
+                TwoBitCounterState::WeakNotTaken => self.make_global_prediction(pc),
+            }
     }
 
+
     fn train_predictor(&mut self, pc: u32, outcome: BranchResult) {
-        todo!()
+        let local_prediction = self.make_local_prediction(pc);
+        let global_prediction = self.make_global_prediction(pc);
+
+        if local_prediction != global_prediction {
+             if local_prediction == outcome {
+                // println!("switch local");
+                self.m_state = self.m_state.shift_result(BranchResult::Taken);
+            } else {
+                // println!("switch global");
+                self.m_state = self.m_state.shift_result(BranchResult::NotTaken);
+            }
+        }
+
+        self.train_global_predictor(pc, outcome.clone());
+        self.train_local_predictor(pc, outcome.clone());
     }
 }
 
