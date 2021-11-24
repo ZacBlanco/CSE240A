@@ -7,36 +7,36 @@ use crate::BranchResult;
 
 #[derive(Clone, Copy, Debug)]
 enum TwoBitCounterState {
-    StrongNotTaken,
-    StrongTaken,
-    WeakNotTaken,
-    WeakTaken,
+    StrongNot,
+    Strong,
+    WeakNot,
+    Weak,
 }
 
 impl TwoBitCounterState {
     fn shift_result(&self, branch: BranchResult) -> TwoBitCounterState {
         match branch {
             BranchResult::Taken => match &self {
-                Self::StrongNotTaken => Self::WeakNotTaken,
-                Self::WeakNotTaken => Self::WeakTaken,
-                Self::WeakTaken => Self::StrongTaken,
-                Self::StrongTaken => Self::StrongTaken,
+                Self::StrongNot => Self::WeakNot,
+                Self::WeakNot => Self::Weak,
+                Self::Weak => Self::Strong,
+                Self::Strong => Self::Strong,
             },
             BranchResult::NotTaken => match &self {
-                Self::StrongNotTaken => Self::StrongNotTaken,
-                Self::WeakNotTaken => Self::StrongNotTaken,
-                Self::WeakTaken => Self::WeakNotTaken,
-                Self::StrongTaken => Self::WeakTaken,
+                Self::StrongNot => Self::StrongNot,
+                Self::WeakNot => Self::StrongNot,
+                Self::Weak => Self::WeakNot,
+                Self::Strong => Self::Weak,
             },
         }
     }
 
-    fn to_branch_result(&self) -> BranchResult {
-        match &self {
-            Self::WeakTaken => BranchResult::Taken,
-            Self::StrongTaken => BranchResult::Taken,
-            Self::WeakNotTaken => BranchResult::NotTaken,
-            Self::StrongNotTaken => BranchResult::NotTaken,
+    fn to_branch_result(self) -> BranchResult {
+        match self {
+            Self::Weak => BranchResult::Taken,
+            Self::Strong => BranchResult::Taken,
+            Self::WeakNot => BranchResult::NotTaken,
+            Self::StrongNot => BranchResult::NotTaken,
         }
     }
 }
@@ -57,7 +57,7 @@ pub struct StaticPredictor;
 
 impl Predictor for StaticPredictor {
     fn make_prediction(&self, _pc: u32) -> BranchResult {
-        return BranchResult::Taken;
+        BranchResult::Taken
     }
 
     fn train_predictor(&mut self, _pc: u32, _outcome: BranchResult) {
@@ -115,7 +115,7 @@ impl Predictor for GSharePredictor {
         let state = self
             .state_table
             .entry(index)
-            .or_insert(TwoBitCounterState::StrongNotTaken);
+            .or_insert(TwoBitCounterState::StrongNot);
         *state = state.shift_result(outcome);
     }
 }
@@ -125,9 +125,9 @@ pub struct TournamentPredictor {
     lhist_bits: u32,
     pc_index: u32,
     g_state: Vec<TwoBitCounterState>,
-    l_state: Vec<TwoBitCounterState>, 
+    l_state: Vec<TwoBitCounterState>,
     l_pattern: Vec<u32>,
-    m_state: TwoBitCounterState, 
+    m_state: TwoBitCounterState,
     ghist: usize,
 }
 
@@ -138,16 +138,15 @@ impl TournamentPredictor {
             ghist_bits,
             lhist_bits,
             pc_index,
-            g_state: vec![TwoBitCounterState::WeakNotTaken; usize::pow(2,ghist_bits) as usize],
-            l_state: vec![TwoBitCounterState::WeakNotTaken; u32::pow(2,lhist_bits) as usize],
+            g_state: vec![TwoBitCounterState::WeakNot; usize::pow(2,ghist_bits) as usize],
+            l_state: vec![TwoBitCounterState::WeakNot; u32::pow(2,lhist_bits) as usize],
             l_pattern: vec![0; u32::pow(2,pc_index) as usize],
-            m_state: TwoBitCounterState::WeakNotTaken,
+            m_state: TwoBitCounterState::WeakNot,
             ghist: 0,
         }
     }
 
     fn make_local_prediction(&self, pc: u32) -> BranchResult {
-
         // println!("local");
         let l_pattern_index = (pc & ((1 << self.pc_index) -1))as usize;
         let l_index = self.l_pattern[l_pattern_index];
@@ -179,7 +178,7 @@ impl TournamentPredictor {
 
     fn make_global_prediction(&self, pc: u32) -> BranchResult {
         // println!("global");
-        let g_index = self.ghist & ((1 << self.ghist_bits) -1);
+        let g_index = self.ghist & ((1 << self.ghist_bits) - 1);
         // println!("g_hist: {:#?}", self.ghist);
         // println!("g_state: {:#?}", self.g_state);
         // println!("pred: {:#?}", self.g_state[g_index].to_branch_result());
@@ -192,31 +191,27 @@ impl TournamentPredictor {
         // println!("g_hist: {:#?}", self.ghist);
         self.g_state[self.ghist] = self.g_state[self.ghist].shift_result(outcome.clone());
         // println!("g_state: {:#?}", self.g_state);
-        self.ghist = ((self.ghist << 1)  & ((1 << self.ghist_bits) -1)) | outcome as usize ;
+        self.ghist = ((self.ghist << 1) & ((1 << self.ghist_bits) - 1)) | outcome as usize;
     }
 }
 
 #[allow(unused_variables)]
 impl Predictor for TournamentPredictor {
-
-
     fn make_prediction(&self, pc: u32) -> BranchResult {
         match self.m_state {
-                TwoBitCounterState::WeakTaken => self.make_local_prediction(pc),
-                TwoBitCounterState::StrongTaken => self.make_local_prediction(pc),
-                TwoBitCounterState::StrongNotTaken => self.make_global_prediction(pc),
-                TwoBitCounterState::WeakNotTaken => self.make_global_prediction(pc),
-            }
-        // self.make_local_prediction(pc)
+            TwoBitCounterState::Weak => self.make_local_prediction(pc),
+            TwoBitCounterState::Strong => self.make_local_prediction(pc),
+            TwoBitCounterState::StrongNot => self.make_global_prediction(pc),
+            TwoBitCounterState::WeakNot => self.make_global_prediction(pc),
+        }
     }
-
 
     fn train_predictor(&mut self, pc: u32, outcome: BranchResult) {
         let local_prediction = self.make_local_prediction(pc);
         let global_prediction = self.make_global_prediction(pc);
 
         if local_prediction != global_prediction {
-             if local_prediction == outcome {
+            if local_prediction == outcome {
                 // println!("switch local");
                 self.m_state = self.m_state.shift_result(BranchResult::Taken);
             } else {
@@ -226,7 +221,7 @@ impl Predictor for TournamentPredictor {
         }
 
         self.train_global_predictor(pc, outcome.clone());
-        self.train_local_predictor(pc, outcome.clone());
+        self.train_local_predictor(pc, outcome);
     }
 }
 
