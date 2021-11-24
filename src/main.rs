@@ -14,13 +14,22 @@ pub enum BranchResult {
     Taken,
     NotTaken,
 }
+
+impl BranchResult {
+    fn to_int(&self) -> i32 {
+        match self {
+            BranchResult::NotTaken => -1,
+            &BranchResult::Taken => 1,
+        }
+    }
+}
 // ask for the order or the thing above
 #[derive(Debug)]
 enum Predictors {
     Static,
     Gshare(u32),
     Tournament(u32, u32, u32),
-    Custom,
+    Custom(u32, u32, u32),
 }
 
 impl FromStr for Predictors {
@@ -54,7 +63,18 @@ impl FromStr for Predictors {
             }
             Ok(Predictors::Tournament(nums[0], nums[1], nums[2]))
         } else if s.starts_with("custom") {
-            Ok(Predictors::Custom)
+            let s = s.to_string();
+            let nums = s.trim_start_matches("custom").split(':');
+            let nums = nums
+                .filter(|s| !s.is_empty())
+                .map(|v| v.parse::<u32>().unwrap())
+                .collect::<Vec<u32>>();
+            if nums.len() < 3 {
+                return Err(String::from(
+                    "custom:<history_size>:<num_perceptrons>:<theta> required for custom predictor",
+                ));
+            }
+            Ok(Predictors::Custom(nums[0], nums[1], nums[2]))
         } else {
             Err(String::from("invalid predictor type"))
         }
@@ -81,7 +101,9 @@ fn main() -> Result<(), std::io::Error> {
         Predictors::Tournament(ghist, lhist, pc_index) => {
             Box::new(TournamentPredictor::new(ghist, lhist, pc_index))
         }
-        Predictors::Custom => Box::new(CustomPredictor::new()),
+        Predictors::Custom(hist_size, table_size, theta) => {
+            Box::new(CustomPredictor::new(hist_size, table_size, theta))
+        }
     };
 
     let mut num_branches: u32 = 0;

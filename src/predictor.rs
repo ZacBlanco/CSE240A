@@ -1,7 +1,11 @@
 //! This file contains the trait defining the branch predictor.
 //!
 
-use std::{cmp::min, collections::HashMap};
+use std::{
+    cmp::min,
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+};
 
 use crate::BranchResult;
 
@@ -130,7 +134,6 @@ pub struct TournamentPredictor {
     ghist: usize,
 }
 
-#[allow(unused_variables)]
 impl TournamentPredictor {
     pub fn new(ghist_bits: u32, lhist_bits: u32, pc_index: u32) -> TournamentPredictor {
         TournamentPredictor {
@@ -174,7 +177,7 @@ impl TournamentPredictor {
         // println!("l_state: {:#?}", self.l_state);
     }
 
-    fn make_global_prediction(&self, pc: u32) -> BranchResult {
+    fn make_global_prediction(&self, _pc: u32) -> BranchResult {
         // println!("global");
         let g_index = self.ghist & ((1 << self.ghist_bits) - 1);
         // println!("g_hist: {:#?}", self.ghist);
@@ -183,7 +186,7 @@ impl TournamentPredictor {
         self.g_state[g_index].to_branch_result()
     }
 
-    fn train_global_predictor(&mut self, pc: u32, outcome: BranchResult) {
+    fn train_global_predictor(&mut self, _pc: u32, outcome: BranchResult) {
         // println!("outcome: {:#?}", outcome);
         // println!("outcome: {:#?}", outcome.clone() as usize);
         // println!("g_hist: {:#?}", self.ghist);
@@ -193,7 +196,6 @@ impl TournamentPredictor {
     }
 }
 
-#[allow(unused_variables)]
 impl Predictor for TournamentPredictor {
     fn make_prediction(&self, pc: u32) -> BranchResult {
         match self.m_state {
@@ -223,22 +225,93 @@ impl Predictor for TournamentPredictor {
     }
 }
 
-pub struct CustomPredictor;
+/// [CustomPredictor] is a perceptron-based branch predictor based on
+/// https://www.cs.utexas.edu/~lin/papers/hpca01.pdf
+pub struct CustomPredictor {
+    /// size of the global history table, also equivalent to the size of the perceptron
+    history_register: Vec<BranchResult>,
+    /// a vec representing a table of all perceptrons in the predictor
+    perceptrons: Vec<Perceptron>,
+    /// a parameter used to determine when training should (or should not) occur.
+    theta: u32,
+}
+
+type Perceptron = Vec<i32>;
 
 impl CustomPredictor {
-    pub fn new() -> CustomPredictor {
-        CustomPredictor {}
+    pub fn new(history_length: u32, perceptron_table_size: u32, theta: u32) -> CustomPredictor {
+        CustomPredictor {
+            history_register: vec![BranchResult::NotTaken; history_length as usize],
+            perceptrons: vec![vec![0; history_length as usize]; perceptron_table_size as usize],
+            theta,
+        }
+    }
+
+    /// takes in a pc address and hashes it to an index in the perceptrons table
+    fn hash_pc(&self, pc: u32) -> usize {
+        let mut hasher = DefaultHasher::new();
+        pc.hash(&mut hasher);
+        hasher.finish() as usize % self.perceptrons.len()
+    }
+
+    /// returns the dot product of a perceptron with the global history table
+    fn history_dot(&self, perceptron: &[i32]) -> i32 {
+        let mut running_total = 0;
+        // iterate over each perceptron weight
+        for (idx, weight) in perceptron.iter().enumerate() {
+            // the matching result from the global history table
+            // if the branch is taken, then it results in a positive score
+            // not taken is a negative score
+            let x = &self.history_register[idx];
+            running_total += match x {
+                BranchResult::Taken => *weight,
+                BranchResult::NotTaken => -1 * weight,
+            }
+        }
+        running_total
+    }
+
+    /// returns the prediction value based on the perceptron dot product
+    fn predict(&self, pc: u32) -> i32 {
+        let perceptron = &self.perceptrons[self.hash_pc(pc)];
+        self.history_dot(perceptron)
     }
 }
 
-#[allow(unused_variables)]
 impl Predictor for CustomPredictor {
+    /// makes the prediction based on the branch prediction value.
+    /// <= 0 means we predict not to take the branch
+    /// > 0 means to take the branch
     fn make_prediction(&self, pc: u32) -> BranchResult {
-        todo!()
+        match &self.predict(pc).cmp(&0) {
+            std::cmp::Ordering::Less => BranchResult::NotTaken,
+            std::cmp::Ordering::Equal => BranchResult::NotTaken,
+            std::cmp::Ordering::Greater => BranchResult::Taken,
+        }
     }
 
+    /// train perceptrons based on the true branch outcome
+    /// first, get the original prediction value
+    /// if the original prediction was correct AND greater than our theta there is no need to train
+    ///
+    /// however, if the prediction is wrong and we're under theta, then we need to train the
+    /// perceptron
     fn train_predictor(&mut self, pc: u32, outcome: BranchResult) {
-        todo!()
+        let pred = self.predict(pc);
+        if pred.signum() != outcome.to_int().signum() || (pred.abs() as u32) < self.theta {
+            // train perceptron, lookup the exact perceptron vec, then perform the training routine
+            let percep_idx = self.hash_pc(pc);
+            let perceptron = &mut self.perceptrons[percep_idx];
+            let t = outcome.to_int();
+            // training routine
+            for (idx, w) in perceptron.iter_mut().enumerate() {
+                let x = self.history_register[idx].to_int();
+                *w += t * x;
+            }
+        }
+        // finally, update the history register
+        self.history_register.rotate_right(1);
+        self.history_register[0] = outcome;
     }
 }
 
