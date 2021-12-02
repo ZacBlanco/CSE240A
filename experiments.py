@@ -57,8 +57,8 @@ def run_custom_predictor(trace, history_size, num_perceptrons, theta, only_miss=
 if __name__ == "__main__":
     gshare_conf = {'lh_bits': 10}
     tournament_conf = {'gh_bits': 10, 'lh_bits': 10, 'index': 9}
-    perceptron_conf = {'h_bits': 10, 'n_percep': 10, 'theta': 9}
-    
+    perceptron_conf = {'h_bits': 28, 'n_percep': 146, 'theta': 68}
+
     results = {}
     for name_trace in traces:
         gshare_miss = run_gshare_predictor(name_trace, gshare_conf['lh_bits'])
@@ -71,5 +71,5 @@ if __name__ == "__main__":
             'custom': custom_miss
         }
         results[name_trace] = trace_res
-    
+
     pprint.pprint(results, width=20)
