@@ -55,9 +55,12 @@ def run_custom_predictor(trace, history_size, num_perceptrons, theta, only_miss=
 
 
 if __name__ == "__main__":
-    gshare_conf = {'lh_bits': 10}
-    tournament_conf = {'gh_bits': 10, 'lh_bits': 10, 'index': 9}
-    perceptron_conf = {'h_bits': 28, 'n_percep': 146, 'theta': 68}
+    # gshare uses 13 bits (see readme)
+    gshare_conf = {'lh_bits': 13}
+    # tournament has 9 global history, 10 local, and 10 PC index bits
+    tournament_conf = {'gh_bits': 9, 'lh_bits': 10, 'index': 10}
+    # best values based on an 8KiB (64Kib) budget from the paper
+    perceptron_conf = {'h_bits': 34, 'n_percep': 305, 'theta': 79}
 
     results = {}
     for name_trace in traces:
