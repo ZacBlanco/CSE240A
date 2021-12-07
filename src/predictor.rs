@@ -99,7 +99,13 @@ impl GSharePredictor {
     }
 
     fn xor_pc_history(&self, pc: u32) -> u32 {
-        pc ^ self.hist_to_u32()
+        // the table can only be indexed up to 2^(m) bits
+        // this left shifts a 1 n places to get 0000...1000...000
+        // subtract 1 to get a mask of 000001111..111 with 1s in the N
+        // least significant places
+        let mask = (1  << self.hist_bits) - 1;
+        // do the xor first, then apply the mask
+        (pc ^ self.hist_to_u32()) & mask
     }
 }
 
