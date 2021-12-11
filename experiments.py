@@ -97,18 +97,18 @@ if __name__ == "__main__":
         custom_vary = []
         for budget, h_bits in optimal_perceptron.items():
             theta = calc_theta(h_bits)
-            custom_miss = run_custom_predictor(name_trace, h_bits, calc_n_percep(budget, theta, h_bits), theta)
-            custom_vary.append(custom_miss)
+            custom_miss_it = run_custom_predictor(name_trace, h_bits, calc_n_percep(budget, theta, h_bits), theta)
+            custom_vary.append(custom_miss_it)
 
         gshare_vary = []
         for i in range(9,19):
-            gshare_miss = run_gshare_predictor(name_trace, i)
-            gshare_vary.append(gshare_miss)
+            gshare_miss_it = run_gshare_predictor(name_trace, i)
+            gshare_vary.append(gshare_miss_it)
 
         tourn_vary = []
         for i in range(8,18):
-            tourn_miss = run_tournament_predictor(name_trace, i+1, i+1, i)
-            tourn_vary.append(tourn_miss)
+            tourn_miss_it = run_tournament_predictor(name_trace, i+1, i+1, i)
+            tourn_vary.append(tourn_miss_it)
 
         trace_res = {
             'gshare': gshare_miss,
